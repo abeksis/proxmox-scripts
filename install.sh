@@ -80,6 +80,8 @@ printf "%bAvailable installers:%b\n\n" "$BOLD" "$RESET"
 printf "  1) Ubuntu 24.04 LTS\n"
 printf "  2) Debian 13 Trixie\n"
 printf "  3) Windows 11\n"
+printf "  4) Home Assistant OS\n"
+printf "  5) OPNsense\n"
 printf "  q) Exit\n\n"
 
 while true; do
@@ -100,11 +102,21 @@ while true; do
             SELECTED_LABEL="Windows 11 installer"
             break
             ;;
+        4)
+            SELECTED_SCRIPT="install-home-assistant.sh"
+            SELECTED_LABEL="Home Assistant OS installer"
+            break
+            ;;
+        5)
+            SELECTED_SCRIPT="install-opnsense.sh"
+            SELECTED_LABEL="OPNsense installer"
+            break
+            ;;
         q|quit|exit)
             warning "No installer was run."
             exit 0
             ;;
-        *) warning "Select 1, 2, 3, or q." ;;
+        *) warning "Select 1, 2, 3, 4, 5, or q." ;;
     esac
 done
 
