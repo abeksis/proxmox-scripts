@@ -271,23 +271,46 @@ else
     success "Latest installation media detected: OPNsense $OPNSENSE_VERSION"
 fi
 
-printf "\nConfigure the OPNsense network interfaces.\n"
-WAN_BRIDGE=$(prompt_bridge "WAN bridge" "vmbr0")
-WAN_VLAN=$(prompt_vlan "WAN VLAN tag")
+printf "\nSelect the initial OPNsense network mode:\n"
+NETWORK_MODE=$(select_option "Network mode" \
+    "Isolated installation (no network adapters)" \
+    "Temporary management interface on an isolated bridge" \
+    "Configure production LAN and WAN now")
 
-while true; do
-    LAN_BRIDGE=$(prompt_bridge "LAN bridge" "vmbr1")
-    LAN_VLAN=$(prompt_vlan "LAN VLAN tag")
-    if [[ "${WAN_BRIDGE}:${WAN_VLAN:-untagged}" != "${LAN_BRIDGE}:${LAN_VLAN:-untagged}" ]]; then
-        break
-    fi
-    warning "WAN and LAN cannot use the same bridge and the same VLAN. Choose a separate LAN network."
-done
+TEMP_NET=""
+WAN_NET=""
+LAN_NET=""
+case "$NETWORK_MODE" in
+    "Isolated installation (no network adapters)")
+        warning "The VM will have no network connectivity. Use only the Proxmox console during installation."
+        ;;
+    "Temporary management interface on an isolated bridge")
+        warning "Only select a bridge that is not connected to the production LAN or WAN."
+        TEMP_BRIDGE=$(prompt_bridge "Isolated management bridge" "vmbr99")
+        TEMP_VLAN=$(prompt_vlan "Temporary management VLAN tag")
+        TEMP_NET="virtio,bridge=${TEMP_BRIDGE}"
+        [[ -n "$TEMP_VLAN" ]] && TEMP_NET+=",tag=${TEMP_VLAN}"
+        ;;
+    "Configure production LAN and WAN now")
+        warning "Connecting a second firewall to a live LAN can cause DHCP and gateway conflicts."
+        WAN_BRIDGE=$(prompt_bridge "WAN bridge" "vmbr0")
+        WAN_VLAN=$(prompt_vlan "WAN VLAN tag")
 
-WAN_NET="virtio,bridge=${WAN_BRIDGE}"
-LAN_NET="virtio,bridge=${LAN_BRIDGE}"
-[[ -n "$WAN_VLAN" ]] && WAN_NET+=",tag=${WAN_VLAN}"
-[[ -n "$LAN_VLAN" ]] && LAN_NET+=",tag=${LAN_VLAN}"
+        while true; do
+            LAN_BRIDGE=$(prompt_bridge "LAN bridge" "vmbr1")
+            LAN_VLAN=$(prompt_vlan "LAN VLAN tag")
+            if [[ "${WAN_BRIDGE}:${WAN_VLAN:-untagged}" != "${LAN_BRIDGE}:${LAN_VLAN:-untagged}" ]]; then
+                break
+            fi
+            warning "WAN and LAN cannot use the same bridge and the same VLAN. Choose a separate LAN network."
+        done
+
+        WAN_NET="virtio,bridge=${WAN_BRIDGE}"
+        LAN_NET="virtio,bridge=${LAN_BRIDGE}"
+        [[ -n "$WAN_VLAN" ]] && WAN_NET+=",tag=${WAN_VLAN}"
+        [[ -n "$LAN_VLAN" ]] && LAN_NET+=",tag=${LAN_VLAN}"
+        ;;
+esac
 
 printf "\n%bConfiguration summary%b\n" "$BOLD" "$RESET"
 printf "  OPNsense media:     %s\n" "$OPNSENSE_VERSION"
@@ -298,13 +321,26 @@ printf "  RAM:                %s MB\n" "$RAM_MB"
 printf "  Disk:               %s GB on %s\n" "$DISK_GB" "$VM_STORAGE"
 printf "  Installation ISO:  %s%s\n" "$OPNSENSE_ISO" \
     "$([[ $ISO_DOWNLOAD_NEEDED -eq 1 ]] && echo ' (will be downloaded and verified)' || true)"
-printf "  LAN (vtnet0):       %s%s\n" "$LAN_BRIDGE" "${LAN_VLAN:+, VLAN $LAN_VLAN}"
-printf "  WAN (vtnet1):       %s%s\n" "$WAN_BRIDGE" "${WAN_VLAN:+, VLAN $WAN_VLAN}"
+printf "  Network mode:       %s\n" "$NETWORK_MODE"
+case "$NETWORK_MODE" in
+    "Isolated installation (no network adapters)")
+        printf "  Network adapters:   none\n"
+        ;;
+    "Temporary management interface on an isolated bridge")
+        printf "  Temporary (vtnet0): %s%s\n" "$TEMP_BRIDGE" "${TEMP_VLAN:+, VLAN $TEMP_VLAN}"
+        ;;
+    "Configure production LAN and WAN now")
+        printf "  LAN (vtnet0):       %s%s\n" "$LAN_BRIDGE" "${LAN_VLAN:+, VLAN $LAN_VLAN}"
+        printf "  WAN (vtnet1):       %s%s\n" "$WAN_BRIDGE" "${WAN_VLAN:+, VLAN $WAN_VLAN}"
+        ;;
+esac
 printf "  Machine / firmware: q35 / SeaBIOS\n"
 printf "  Installation mode:  manual through the Proxmox console\n"
 printf "  Start after setup:  yes\n\n"
 
-warning "Incorrect WAN/LAN placement can disrupt or expose your network. Verify both interfaces carefully."
+if [[ "$NETWORK_MODE" == "Configure production LAN and WAN now" ]]; then
+    warning "Incorrect WAN/LAN placement can disrupt or expose your network. Verify both interfaces carefully."
+fi
 if ! prompt_yes_no "Create and start this OPNsense VM?" "n"; then
     warning "Installation cancelled. No VM was created."
     exit 0
@@ -352,7 +388,7 @@ fi
 
 progress "Creating OPNsense VM $VMID..."
 VM_CREATE_ATTEMPTED=1
-qm create "$VMID" \
+QM_CREATE_ARGS=(
     --name "$VM_NAME" \
     --ostype other \
     --machine q35 \
@@ -361,9 +397,17 @@ qm create "$VMID" \
     --cores "$CPU_CORES" \
     --memory "$RAM_MB" \
     --scsihw virtio-scsi-single \
-    --net0 "$LAN_NET" \
-    --net1 "$WAN_NET" \
     --agent enabled=1
+)
+case "$NETWORK_MODE" in
+    "Temporary management interface on an isolated bridge")
+        QM_CREATE_ARGS+=(--net0 "$TEMP_NET")
+        ;;
+    "Configure production LAN and WAN now")
+        QM_CREATE_ARGS+=(--net0 "$LAN_NET" --net1 "$WAN_NET")
+        ;;
+esac
+qm create "$VMID" "${QM_CREATE_ARGS[@]}"
 VM_CREATED=1
 
 qm set "$VMID" --scsi0 "${VM_STORAGE}:${DISK_GB},discard=on,iothread=1,ssd=1"
@@ -384,9 +428,33 @@ Next steps:
        Username: installer
        Password: opnsense
   3. Install OPNsense to the virtual disk and set a new root password.
-  4. Keep or assign vtnet0 as LAN and vtnet1 as WAN.
-  5. After installation, detach the ISO and boot from disk:
+  4. After installation, detach the ISO and boot from disk:
        qm set ${VMID} --delete ide2
        qm set ${VMID} --boot order=scsi0
+EOF
+
+case "$NETWORK_MODE" in
+    "Isolated installation (no network adapters)")
+        cat <<EOF
+  5. Keep the VM isolated while planning the pfSense migration.
+  6. Do not restore a pfSense config.xml directly into OPNsense. Follow:
+       https://github.com/abeksis/proxmox-scripts/blob/main/docs/pfsense-to-opnsense.md
+  7. Add production LAN/WAN adapters only during the planned cutover.
+EOF
+        ;;
+    "Temporary management interface on an isolated bridge")
+        cat <<EOF
+  5. Use vtnet0 only for isolated management while recreating the configuration.
+  6. Remove the temporary adapter before adding production LAN/WAN adapters:
+       qm set ${VMID} --delete net0
+  7. Follow the controlled migration and cutover guide:
+       https://github.com/abeksis/proxmox-scripts/blob/main/docs/pfsense-to-opnsense.md
+EOF
+        ;;
+    "Configure production LAN and WAN now")
+        cat <<EOF
+  5. Keep or assign vtnet0 as LAN and vtnet1 as WAN.
   6. Install the os-qemu-guest-agent plugin from the OPNsense web interface.
 EOF
+        ;;
+esac

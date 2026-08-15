@@ -83,13 +83,15 @@ bash <(curl -fsSL https://raw.githubusercontent.com/abeksis/proxmox-scripts/main
 
 ## OPNsense installer
 
-`install-opnsense.sh` detects existing OPNsense installation media or downloads the latest official amd64 DVD image, verifies its published SHA-256 checksum, and creates a Q35 VM with separate VirtIO WAN and LAN interfaces. Bridges and optional VLAN tags are validated before the VM is created.
+`install-opnsense.sh` detects existing OPNsense installation media or downloads the latest official amd64 DVD image, verifies its published SHA-256 checksum, and creates a Q35 VM. Its default network mode is fully isolated with no virtual network adapters. This avoids DHCP and gateway conflicts while preparing a firewall migration.
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/abeksis/proxmox-scripts/main/install-opnsense.sh)
 ```
 
-The OPNsense installation continues manually in the Proxmox console. The script assigns `vtnet0` to LAN and `vtnet1` to WAN, matching OPNsense defaults. Carefully verify network placement: an incorrect firewall interface assignment can expose services or interrupt connectivity.
+The installer offers three initial network modes: fully isolated, one temporary management interface on an existing isolated bridge, or production LAN/WAN interfaces. The fully isolated mode is recommended when migrating from pfSense. See [Migrating from pfSense to OPNsense](docs/pfsense-to-opnsense.md) before connecting the new firewall to a live network.
+
+Do not restore a pfSense `config.xml` directly into OPNsense. Use the backup as a protected reference and recreate the configuration in stages. Carefully verify network placement: a second DHCP server or duplicate gateway address can interrupt connectivity.
 
 ## Requirements
 
