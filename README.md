@@ -27,6 +27,18 @@ The installer lets you configure:
 
 It shows a complete configuration summary before making changes and starts the VM after a successful setup.
 
+## Debian 13 VM installer
+
+`install-debian.sh` provides the same interactive deployment workflow for Debian 13 "Trixie" using the official Debian generic cloud image and Proxmox Cloud-Init.
+
+Run it from a Proxmox VE root shell:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/abeksis/proxmox-scripts/main/install-debian.sh)
+```
+
+The installer configures CPU, RAM, disk, storage, DHCP or static IPv4 networking, a Cloud-Init user, an optional password and SSH key, serial console access, and the QEMU Guest Agent setting.
+
 ## Requirements
 
 - Proxmox VE

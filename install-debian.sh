@@ -2,7 +2,7 @@
 
 set -Eeuo pipefail
 
-readonly IMAGE_URL="https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img"
+readonly IMAGE_URL="https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2"
 
 if [[ -t 1 ]]; then
     readonly RED='\033[0;31m'
@@ -53,8 +53,8 @@ show_header() {
     printf "%b" "$BOLD"
     cat <<'EOF'
 ╔══════════════════════════════════════════════╗
-║       Proxmox Ubuntu VM Installer            ║
-║             Ubuntu 24.04 LTS                 ║
+║       Proxmox Debian VM Installer            ║
+║              Debian 13 Trixie                ║
 ╚══════════════════════════════════════════════╝
 EOF
     printf "%b\n" "$RESET"
@@ -146,7 +146,7 @@ if command -v curl >/dev/null 2>&1; then
 elif command -v wget >/dev/null 2>&1; then
     DOWNLOADER="wget"
 else
-    die "Either curl or wget is required to download the Ubuntu cloud image."
+    die "Either curl or wget is required to download the Debian cloud image."
 fi
 
 success "Proxmox commands and root access verified."
@@ -164,7 +164,7 @@ while true; do
     fi
 done
 
-VM_NAME=$(prompt_default "VM name" "ubuntu-2404")
+VM_NAME=$(prompt_default "VM name" "debian-13")
 [[ "$VM_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]] || die "VM name contains invalid characters."
 
 CPU_CORES=$(prompt_integer "CPU cores" "4" 1)
@@ -226,7 +226,7 @@ while true; do
     esac
 done
 
-CI_USER=$(prompt_default "Cloud-Init username" "ubuntu")
+CI_USER=$(prompt_default "Cloud-Init username" "debian")
 [[ "$CI_USER" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]] || die "Cloud-Init username is invalid."
 
 CONFIGURE_PASSWORD=0
@@ -284,14 +284,14 @@ fi
 # Check again immediately before creating the VM to prevent an ID race or overwrite.
 vm_id_exists "$VMID" && die "VM ID $VMID was created by another process. Nothing was changed."
 
-IMAGE_PATH=$(mktemp "/tmp/ubuntu-24.04-server-cloudimg-amd64.img.XXXXXX")
-progress "Downloading the official Ubuntu 24.04 LTS cloud image..."
+IMAGE_PATH=$(mktemp "/tmp/debian-13-genericcloud-amd64.qcow2.XXXXXX")
+progress "Downloading the official Debian 13 cloud image..."
 if [[ "$DOWNLOADER" == "curl" ]]; then
     curl -fL --retry 3 --output "$IMAGE_PATH" "$IMAGE_URL"
 else
     wget --tries=3 --output-document="$IMAGE_PATH" "$IMAGE_URL"
 fi
-success "Ubuntu cloud image downloaded."
+success "Debian cloud image downloaded."
 
 progress "Creating VM $VMID..."
 VM_CREATE_ATTEMPTED=1
@@ -345,5 +345,5 @@ rm -f -- "$IMAGE_PATH"
 IMAGE_PATH=""
 success "Downloaded cloud image removed."
 
-printf "\n%b✔ Ubuntu 24.04 LTS VM %s (%s) is ready.%b\n" \
+printf "\n%b✔ Debian 13 VM %s (%s) is ready.%b\n" \
     "$GREEN" "$VMID" "$VM_NAME" "$RESET"
