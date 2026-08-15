@@ -2,6 +2,24 @@
 
 Simple automated deployment scripts for Proxmox VE.
 
+## Quick start
+
+Run the central interactive installer from a Proxmox VE root shell:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/abeksis/proxmox-scripts/main/install.sh)
+```
+
+Choose an operating system from the menu:
+
+```text
+1) Ubuntu 24.04 LTS
+2) Debian 13 Trixie
+3) Windows 11
+```
+
+The central installer downloads, validates, and runs the selected operating-system installer. Individual installers can also be run directly using the commands below.
+
 ## Ubuntu 24.04 VM installer
 
 `install-ubuntu.sh` is an interactive installer that runs directly on a Proxmox VE host. It downloads the official Ubuntu 24.04 LTS cloud image and creates a virtual machine using Proxmox Cloud-Init.
